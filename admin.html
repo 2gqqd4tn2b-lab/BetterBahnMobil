@@ -57,6 +57,9 @@ input[type=password],input[type=text]{display:block;width:100%;font:inherit;font
 .people li::before{content:none}
 .people button{border:1px solid var(--line);background:none;color:var(--bad);font:inherit;font-size:14px;border-radius:8px;padding:5px 10px;cursor:pointer}
 .pend{background:var(--surface);border:2px solid var(--signal);border-radius:12px;padding:14px 18px;margin-top:28px}
+.bar{display:flex;justify-content:flex-end;margin:-12px 0 8px}
+.bar button{border:1px solid var(--line);background:none;color:var(--muted);font:inherit;font-size:14px;border-radius:8px;padding:6px 12px;cursor:pointer}
+.bar button:focus-visible{outline:3px solid var(--signal);outline-offset:2px}
 code{font-size:14px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:1px 6px;word-break:break-all}
 
 </style>
@@ -72,7 +75,8 @@ code{font-size:14px;background:var(--surface);border:1px solid var(--line);borde
 <p class="err" id="uerr" aria-live="polite"></p>
 </form>
 <div id="panel" hidden>
-<h2>Person freischalten</h2>
+<div class="bar"><button type="button" id="alogout">Abmelden</button></div>
+<h2 style="margin-top:8px">Person freischalten</h2>
 <form id="add">
 <label for="nn">Name der Person</label>
 <input type="text" id="nn" maxlength="60" required>
@@ -115,7 +119,7 @@ code{font-size:14px;background:var(--surface);border:1px solid var(--line);borde
 </main>
 <script>
 const TOPIC = "splitsuche-99cc9301a22ba2ca";
-const UTOP = {"i": "YY33Jt1bWjjIeHPA", "c": "zt8zvU628QiEsOCwbyf/mrYYAg74LSbdx0TCy+B+wBUrYCkVYZ/1rE2KAFPJhIjDnrSM"};
+const UTOP = {"i": "1ICJRJ4hR6iSfUG3", "c": "7jC3z2+CvSGkgjPmc0i6KSCCz0tMp122nnnbDjWjmBXw5qQRheqoxUVRpGk8T61LzUQ6"};
 const VER = "27.10.2026 (3)";
 const ITER = 150000;
 const enc = new TextEncoder();
@@ -210,6 +214,11 @@ async function initUpdate() {
     try { await navigator.clipboard.writeText(t.value); ok.textContent = 'Nachricht kopiert.'; } catch (e) { prompt('Zum Kopieren:', t.value); }
   };
 }
+document.getElementById('alogout').addEventListener('click', () => {
+  if (dirty && !confirm('Es gibt ungespeicherte Änderungen. Wirklich abmelden? Sie gehen dann verloren.')) return;
+  dirty = false; K = null; users = [];
+  location.reload();
+});
 window.addEventListener('beforeunload', ev => { if (dirty) { ev.preventDefault(); ev.returnValue = ''; } });
 </script>
 </body>
