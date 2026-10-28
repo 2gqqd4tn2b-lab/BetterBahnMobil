@@ -44,6 +44,7 @@ textarea{width:100%;height:120px;margin-top:10px;font-size:12px;border:1px solid
 .tabs button[aria-selected="true"]{background:var(--ink);color:var(--bg)}
 .tabs button:focus-visible{outline:3px solid var(--signal);outline-offset:2px}
 [hidden]{display:none!important}
+.box a,ol a{color:inherit;text-decoration:underline;text-underline-offset:2px}
 
 label{display:block;font-weight:700;font-size:15px;margin:14px 0 6px}
 input[type=password],input[type=text]{display:block;width:100%;font:inherit;font-size:17px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink)}
@@ -58,6 +59,17 @@ input[type=password],input[type=text]{display:block;width:100%;font:inherit;font
 .people{list-style:none;padding:0;margin:0}
 .people li{display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid var(--line);padding:10px 0}
 .people li::before{content:none}
+.people li.pp{display:block;padding:0}
+.people details{margin:0}
+.people summary{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 0;cursor:pointer;list-style:none;font-weight:400}
+.people summary::-webkit-details-marker{display:none}
+.people summary::after{content:"›";font-size:22px;color:var(--muted);transition:transform .15s}
+.people details[open] summary::after{transform:rotate(90deg)}
+.people .info{padding:0 0 14px;font-size:15px}
+.people .info dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0 0 6px}
+.people .info dt{color:var(--muted)}
+.people .info dd{margin:0;word-break:break-word}
+.people .info .del{color:var(--bad)}
 .people button{border:1px solid var(--line);background:none;color:var(--bad);font:inherit;font-size:14px;border-radius:8px;padding:5px 10px;cursor:pointer}
 .req{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:12px 0}
 .req .meta{color:var(--muted);font-size:14px}
@@ -95,6 +107,8 @@ code{font-size:14px;background:var(--surface);border:1px solid var(--line);borde
 <form id="add">
 <label for="nn">Name der Person</label>
 <input type="text" id="nn" maxlength="60" required>
+<label for="nc">Kontakt (optional)</label>
+<input type="text" id="nc" maxlength="120" placeholder="E-Mail oder Telefon">
 <button class="btn" type="submit">Passwort erzeugen</button>
 </form>
 <div id="made"></div>
@@ -161,8 +175,9 @@ code{font-size:14px;background:var(--surface);border:1px solid var(--line);borde
 </main>
 <script>
 const TOPIC = "splitsuche-99cc9301a22ba2ca";
-const UTOP = {"i": "oPDnKxpSGn4PB9K4", "c": "ZQzdrxetZMz84OBb7Oepe7I+LeIjFeZa5MBiVtDOP49mQeCo+VCCzyweF9Gm2oKNgWI2"};
-const PRIV = {"i": "csAv8NuulAZ5M0yf", "c": "uiVTMxxAv47wT1KGssjEFokWRw9w8wcf8W63IRfijqlTncg3ftrh+DK/Hs84FpUfOzC2AsUcNO6gRsuH7XQgmD8JU7Xd9nxZ20hcLxqKrw2axv543hBAjtcJadFfVLsaX1aX/oRhRxs5vWKMroChv0CdOMMC1O4d+oN0ZUfEtiURAtZULWzZfKkTOMT0pm0W1RJbqz36OTq6sw=="};
+const UTOP = {"i": "AcL6OZl8t5ItGsMU", "c": "DipEui+Q5wd9sgWXpZadj4A5WDNx+i0GIK3H69Bk4WYIE6ssw6GdOmvFuhIZCcYQux6b"};
+const PRIV = {"i": "kRt6HoLSLcm2m/pe", "c": "0WNxRggJsI2H7qJ0Fp2asxIpIKChr1f0jXQzO3dL3FPGmpj7jajKamBYEgfma1zEHFjiE5nPGmlRQGNWMO8/mIRcr2R4qYjt9XsV/dmplCtlOsaavjAluaUJCpSJ9DDpcZQPAdODrw1IotXTtRN6zTca4hrT6+ntoI1EyFOW4ODIpgMfLVo2ANDaH7Bw5waVnkf+tMgptokd6w=="};
+const PUB = "BLMzvfM9wrgijE/OM4ypPJ/TXcRPnCVETEDF8EJEa14UyagXuYturwiEVMgpDPu97EHt5BxkGHztqAY3X7I852E=";
 const VER = "27.10.2026 (3)";
 const ITER = 150000;
 const enc = new TextEncoder();
@@ -194,7 +209,27 @@ async function mkEntry(name, pw) {
   const k = await kekOf(pw, salt);
   return { n: name, h: await hintOf(pw), s: bu(salt), i: bu(iv), w: bu(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k, K)) };
 }
-const usersText = () => '[\n' + users.map(u => JSON.stringify(u)).join(',\n') + '\n]\n';
+const clean = u => { const o = {}; Object.keys(u).forEach(k => { if (k[0] !== '_') o[k] = u[k]; }); return o; };
+const usersText = () => '[\n' + users.map(u => JSON.stringify(clean(u))).join(',\n') + '\n]\n';
+const isAdmin = u => u.n === 'admin';
+async function encName(name, extra) {
+  const pub = await crypto.subtle.importKey('raw', ub(PUB), { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+  const eph = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey']);
+  const k = await crypto.subtle.deriveKey({ name: 'ECDH', public: pub }, eph.privateKey, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k, enc.encode(JSON.stringify(Object.assign({ n: name, d: Date.now() }, extra || {}))));
+  return [bu(await crypto.subtle.exportKey('raw', eph.publicKey)), bu(iv), bu(ct)].join('.');
+}
+async function prepUsers() {
+  let migrated = false;
+  for (const u of users) {
+    if (isAdmin(u)) continue;
+    if (u.e && !u._n) { try { const d = await decReq(u.e); u._n = d.n; u._d = d.d; u._c = d.c || ''; u._m = d.m || ''; u._p = d.p || ''; } catch (e) { u._n = '(unbekannt)'; } }
+    else if (u.n) { u._n = u.n; u.e = await encName(u.n); delete u.n; migrated = true; }
+  }
+  return migrated;
+}
+const nameOf = u => u._n || u.n || '(unbekannt)';
 const accessText = (name, pw) => 'Hallo ' + name + ', hier ist dein Zugang zur Split-Suche:\n' + SITE + '\nPasswort: ' + pw + '\n\nBitte nicht weitergeben.';
 const status = (t, bad) => { const e = $('ghst'); e.textContent = t; e.style.color = bad ? 'var(--bad)' : 'var(--ok)'; };
 
@@ -252,7 +287,7 @@ $('ghcon').onclick = async () => {
   status('Prüfe Verbindung …');
   try {
     const cur = await ghLoad();
-    if (!dirty) users = cur.list;
+    if (!dirty) { users = cur.list; if (await prepUsers()) dirty = true; }
     localStorage.setItem('splitsuche-gh', JSON.stringify(await encK(enc.encode(JSON.stringify(GH)))));
     $('ghtok').value = ''; showGH(); render();
     try { await saveAdminFile(APW); status('Mit GitHub verbunden, auf allen deinen Geräten.'); } catch (e) { status('Mit GitHub verbunden, aber nur auf diesem Gerät: ' + ghHint(e), true); }
@@ -269,13 +304,22 @@ $('savegh').onclick = () => changed();
 // ---- people ----
 function render() {
   const ul = $('list'); ul.innerHTML = '';
-  const people = users.filter(u => u.n !== 'admin');
+  const people = users.filter(u => !isAdmin(u));
   if (!people.length) { const li = document.createElement('li'); li.textContent = 'Noch niemand freigeschaltet.'; ul.appendChild(li); }
   people.forEach(u => {
-    const li = document.createElement('li'); const sp = document.createElement('span'); sp.textContent = u.n; li.appendChild(sp);
-    const b = document.createElement('button'); b.type = 'button'; b.textContent = 'Zugang entfernen';
-    b.onclick = () => { if (confirm(u.n + ' den Zugang entfernen?')) { users = users.filter(x => x !== u); changed(); } };
-    li.appendChild(b); ul.appendChild(li);
+    const li = document.createElement('li'); li.className = 'pp';
+    const when = u._d ? new Date(u._d).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    const legacy = !u._d;
+    li.innerHTML = `<details><summary><span>${escH(nameOf(u))}${u._d ? ' <span class="sub" style="font-size:14px">· seit ' + escH(when.split(',')[0]) + '</span>' : ''}</span></summary><div class="info">
+${legacy ? '<p class="sub" style="margin:0 0 8px">Vor dem Update angelegt. Kontakt und Passwort wurden damals nicht gespeichert.</p>' : `<dl><dt>Freigeschaltet</dt><dd>${escH(when)} Uhr</dd><dt>Kontakt</dt><dd>${u._c ? escH(u._c) : '–'}</dd>${u._m ? `<dt>Nachricht</dt><dd>${escH(u._m)}</dd>` : ''}<dt>Passwort</dt><dd><span data-pw>••••-••••-••••</span> <button type="button" class="btn alt sm" style="margin:0 0 0 6px;padding:3px 10px" data-show>Anzeigen</button></dd></dl><div data-send></div>`}
+<button type="button" class="btn alt sm del" data-del>Zugang entfernen</button></div></details>`;
+    if (!legacy) {
+      const sh = li.querySelector('[data-show]');
+      sh.onclick = () => { const e = li.querySelector('[data-pw]'); const on = sh.textContent === 'Anzeigen'; e.textContent = on ? (u._p || '(nicht gespeichert)') : '••••-••••-••••'; sh.textContent = on ? 'Verbergen' : 'Anzeigen'; };
+      if (u._p) { const box = li.querySelector('[data-send]'); sendButtons(box, nameOf(u), u._p, u._c); const pwEl = box.querySelector('.pw'); if (pwEl) pwEl.remove(); }
+    }
+    li.querySelector('[data-del]').onclick = () => { if (confirm(nameOf(u) + ' den Zugang entfernen?')) { users = users.filter(x => x !== u); changed(); } };
+    ul.appendChild(li);
   });
   $('pend').hidden = !dirty;
   $('uraw').value = usersText();
@@ -293,14 +337,22 @@ function sendButtons(box, name, pw, contact) {
     try { await navigator.clipboard.writeText(t); alert('Nachricht kopiert.'); } catch (e) { prompt('Zum Kopieren:', t); }
   };
 }
-async function grant(name, contact, box) {
+async function grant(name, contact, box, msg) {
+  const same = users.filter(u => !isAdmin(u) && nameOf(u).toLowerCase() === name.toLowerCase());
+  if (same.length) {
+    if (!confirm(name + ' hat schon einen Zugang. Neues Passwort erzeugen? Das bisherige Passwort gilt dann nicht mehr.')) { box.innerHTML = '<p class="sub" style="margin-top:10px">Nichts geändert. ' + escH(name) + ' behält den bisherigen Zugang.</p>'; return; }
+    users = users.filter(u => !same.includes(u));
+  }
   const pw = genpw();
-  users.push(await mkEntry(name, pw));
+  const ent = await mkEntry(name, pw);
+  const n = ent.n; delete ent.n; ent.e = await encName(n, { c: contact || '', m: msg || '', p: pw }); ent._n = n; ent._d = Date.now(); ent._c = contact || ''; ent._m = msg || ''; ent._p = pw;
+  users.push(ent);
   sendButtons(box, name, pw, contact);
   await changed();
 }
 
 // ---- requests ----
+let openReqs = [];
 let handled = []; try { handled = JSON.parse(localStorage.getItem('splitsuche-erledigt') || '[]'); } catch (e) {}
 const saveHandled = () => { try { localStorage.setItem('splitsuche-erledigt', JSON.stringify(handled.slice(-300))); } catch (e) {} };
 async function decReq(blob) {
@@ -331,13 +383,15 @@ async function loadReqs() {
   box.innerHTML = '';
   if (netErr) box.innerHTML = '<p class="err">Anfragen konnten nicht geladen werden. Prüf deine Internetverbindung.</p>';
   else if (!list.length) box.innerHTML = '<p class="sub">Keine offenen Anfragen.</p>';
+  openReqs = [];
   list.forEach(q => {
     const d = document.createElement('div'); d.className = 'req';
+    openReqs.push({ q, d });
     d.innerHTML = `<div class="who">${escH(q.name || 'Ohne Namen')}</div><div class="meta">${escH(q.contact)} · ${new Date(q.t * 1000).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>${q.msg ? `<p class="msg">${escH(q.msg)}</p>` : ''}<div data-act><button class="btn sm" type="button" data-ok>Freischalten</button><button class="btn alt sm" type="button" data-no>Ablehnen</button></div><div data-res></div>`;
     d.querySelector('[data-ok]').onclick = async () => {
       d.querySelector('[data-act]').hidden = true;
       handled.push(q.id); saveHandled();
-      await grant((q.name || 'Ohne Namen').trim().slice(0, 60), q.contact, d.querySelector('[data-res]'));
+      await grant((q.name || 'Ohne Namen').trim().slice(0, 60), q.contact, d.querySelector('[data-res]'), q.msg);
     };
     d.querySelector('[data-no]').onclick = () => { if (!confirm('Anfrage von ' + (q.name || 'Ohne Namen') + ' ablehnen und ausblenden?')) return; handled.push(q.id); saveHandled(); d.remove(); if (!$('reqs').children.length) $('reqs').innerHTML = '<p class="sub">Keine offenen Anfragen.</p>'; };
     box.appendChild(d);
@@ -368,7 +422,9 @@ $('unlock').addEventListener('submit', async ev => {
           if (!fromFile && !(await loadAdminFile(APW))) { try { await saveAdminFile(APW); } catch (err) {} }
         } catch (err) { status('GitHub-Verbindung gestört: ' + ghHint(err), true); }
       }
+      const mig = await prepUsers();
       showGH(); render(); initUpdate(); loadReqs();
+      if (mig) { if (GH) { status('Namen werden jetzt verschlüsselt gespeichert …'); } changed(); }
     }
   } catch (err) { e.textContent = 'users.json konnte nicht geladen werden.'; }
   b.disabled = false; b.textContent = 'Entsperren';
@@ -378,8 +434,17 @@ $('add').addEventListener('submit', async ev => {
   const name = $('nn').value.trim().replace(/\s+/g, ' ');
   if (!name || name.toLowerCase() === 'admin') return;
   $('nn').value = '';
+  const r = openReqs.find(x => document.body.contains(x.d) && (x.q.name || '').trim().toLowerCase() === name.toLowerCase());
+  if (r) {
+    r.d.querySelector('[data-act]').hidden = true; handled.push(r.q.id); saveHandled();
+    $('made').innerHTML = `<p class="sub" style="margin:14px 0 0">${escH(name)} hat oben eine offene Anfrage. Das Passwort steht dort bei der Anfrage.</p>`;
+    r.d.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await grant(name, r.q.contact || $('nc').value.trim(), r.d.querySelector('[data-res]'), r.q.msg); $('nc').value = '';
+    return;
+  }
+  const con = $('nc').value.trim(); $('nc').value = '';
   const box = $('made'); box.innerHTML = `<p class="sub" style="margin:14px 0 0">Passwort für <b>${escH(name)}</b>:</p><div></div>`;
-  await grant(name, '', box.lastElementChild);
+  await grant(name, con, box.lastElementChild);
 });
 $('newadmin').addEventListener('click', async () => {
   if (!confirm('Neues Admin-Passwort erzeugen? Das alte gilt dann nicht mehr, sobald die Liste gespeichert ist.')) return;
