@@ -134,11 +134,12 @@ code{font-size:14px;background:var(--surface);border:1px solid var(--line);borde
 <label for="ghrepo">Repository</label>
 <input type="text" id="ghrepo" autocapitalize="off" autocorrect="off" spellcheck="false">
 <button class="btn" type="button" id="ghcon">Verbinden</button>
-<p class="sub" style="margin-top:10px">Der Token wird nur auf diesem Gerät gespeichert, verschlüsselt mit deinem Admin-Zugang. Auf GitHub landet er nie.</p>
+<p class="sub" style="margin-top:10px">Der Token wird verschlüsselt mit deinem Admin-Passwort gespeichert. So funktioniert die Verbindung auf all deinen Geräten, lesen kann ihn nur, wer das Admin-Passwort kennt.</p>
 </div>
 <div id="ghon" hidden>
 <p>Verbunden mit <b id="ghname"></b>. Änderungen werden automatisch gespeichert.</p>
-<button class="btn alt sm" type="button" id="ghdis">Verbindung auf diesem Gerät trennen</button>
+<p class="sub">Die Verbindung gilt auf allen Geräten, auf denen du dich hier mit dem Admin-Passwort anmeldest.</p>
+<button class="btn alt sm" type="button" id="ghdis">Verbindung trennen</button>
 </div>
 
 <h2>Admin-Passwort ändern</h2>
@@ -160,8 +161,8 @@ code{font-size:14px;background:var(--surface);border:1px solid var(--line);borde
 </main>
 <script>
 const TOPIC = "splitsuche-99cc9301a22ba2ca";
-const UTOP = {"i": "0rfNrxCsGW3Jd1IT", "c": "igkbWLRY0zmWFz4sxsMBLYQhGSgKs267DRnAWM8U563yPR0qrVT//yrpngMshPRCDsd5"};
-const PRIV = {"i": "rBB5LxBCUVxtxv2e", "c": "MEvtyFPB/egBIBABQ3Otc/4tmfMwnE+oUy2T5xuKWtYzWQoLWOr9pr6Xpm8Zx45w7wMg9MUCdozHzDIoTA90TzOXsM2VRjzyrr8kTGC7D0gmKFd8O+BZCQ+Wq+Kops3gtco0CmKJkdU5sgPUve06kZTAFxrOEWwKEX9RWKySWFL1mSzaK/oS9JTV9ha51GHI+XHleoBsY41tHQ=="};
+const UTOP = {"i": "oPDnKxpSGn4PB9K4", "c": "ZQzdrxetZMz84OBb7Oepe7I+LeIjFeZa5MBiVtDOP49mQeCo+VCCzyweF9Gm2oKNgWI2"};
+const PRIV = {"i": "csAv8NuulAZ5M0yf", "c": "uiVTMxxAv47wT1KGssjEFokWRw9w8wcf8W63IRfijqlTncg3ftrh+DK/Hs84FpUfOzC2AsUcNO6gRsuH7XQgmD8JU7Xd9nxZ20hcLxqKrw2axv543hBAjtcJadFfVLsaX1aX/oRhRxs5vWKMroChv0CdOMMC1O4d+oN0ZUfEtiURAtZULWzZfKkTOMT0pm0W1RJbqz36OTq6sw=="};
 const VER = "27.10.2026 (3)";
 const ITER = 150000;
 const enc = new TextEncoder();
@@ -181,7 +182,7 @@ const genpw = () => { const r = crypto.getRandomValues(new Uint32Array(12)); let
 const $ = id => document.getElementById(id);
 const escH = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const SITE = location.origin + location.pathname.replace(/admin\.html$/, '');
-let K = null, KEY = null, PK = null, GH = null, users = [], dirty = false;
+let K = null, KEY = null, PK = null, GH = null, users = [], dirty = false, APW = null;
 $('topic').textContent = TOPIC;
 const ghGuess = () => { const o = location.hostname.split('.')[0]; const r = location.pathname.split('/')[1] || ''; return o + '/' + r; };
 $('ghrepo').value = ghGuess(); $('ghrn').textContent = ghGuess().split('/')[1] || 'dein Repository';
@@ -198,8 +199,8 @@ const accessText = (name, pw) => 'Hallo ' + name + ', hier ist dein Zugang zur S
 const status = (t, bad) => { const e = $('ghst'); e.textContent = t; e.style.color = bad ? 'var(--bad)' : 'var(--ok)'; };
 
 // ---- GitHub ----
-async function ghReq(method, body) {
-  return fetch('https://api.github.com/repos/' + GH.repo + '/contents/users.json', { method, cache: 'no-store', headers: Object.assign({ Authorization: 'Bearer ' + GH.token, Accept: 'application/vnd.github+json' }, body ? { 'Content-Type': 'application/json' } : {}), body: body ? JSON.stringify(body) : undefined });
+async function ghReq(method, body, path) {
+  return fetch('https://api.github.com/repos/' + GH.repo + '/contents/' + (path || 'users.json'), { method, cache: 'no-store', headers: Object.assign({ Authorization: 'Bearer ' + GH.token, Accept: 'application/vnd.github+json' }, body ? { 'Content-Type': 'application/json' } : {}), body: body ? JSON.stringify(body) : undefined });
 }
 async function ghLoad() {
   const r = await ghReq('GET'); if (!r.ok) { const e = new Error('GitHub ' + r.status); e.status = r.status; throw e; }
@@ -211,6 +212,29 @@ async function ghSave() {
   const bytes = enc.encode(usersText()); let bin = ''; for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
   const r = await ghReq('PUT', { message: 'Zugänge aktualisiert', content: btoa(bin), sha: cur.sha });
   if (!r.ok) { const e = new Error('GitHub ' + r.status); e.status = r.status; throw e; }
+}
+const b64u = str => { const bytes = enc.encode(str); let bin = ''; for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]); return btoa(bin); };
+async function adminBlob(pw) {
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  const k = await kekOf(pw, salt);
+  return JSON.stringify({ s: bu(salt), i: bu(iv), c: bu(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k, enc.encode(JSON.stringify(GH)))) });
+}
+async function shaOf(path) { const r = await ghReq('GET', null, path); if (r.status === 404) return null; if (!r.ok) { const e = new Error('GitHub ' + r.status); e.status = r.status; throw e; } return (await r.json()).sha; }
+async function saveAdminFile(pw) {
+  const sha = await shaOf('admin.json');
+  const r = await ghReq('PUT', Object.assign({ message: 'Admin-Verbindung aktualisiert', content: b64u(await adminBlob(pw)) }, sha ? { sha } : {}), 'admin.json');
+  if (!r.ok) { const e = new Error('GitHub ' + r.status); e.status = r.status; throw e; }
+}
+async function deleteAdminFile() {
+  const sha = await shaOf('admin.json'); if (!sha) return;
+  await ghReq('DELETE', { message: 'Admin-Verbindung entfernt', sha }, 'admin.json');
+}
+async function loadAdminFile(pw) {
+  try {
+    const r = await fetch('admin.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return null;
+    const o = await r.json(); const k = await kekOf(pw, ub(o.s));
+    return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: ub(o.i) }, k, ub(o.c))));
+  } catch (e) { return null; }
 }
 const ghHint = e => e.status === 401 ? 'Der Token ist ungültig oder abgelaufen.' : e.status === 403 || e.status === 404 ? 'Der Token darf dieses Repository nicht ändern. Prüf Repository und Berechtigung „Contents: Read and write“.' : 'Keine Verbindung zu GitHub.';
 async function changed() {
@@ -230,11 +254,16 @@ $('ghcon').onclick = async () => {
     const cur = await ghLoad();
     if (!dirty) users = cur.list;
     localStorage.setItem('splitsuche-gh', JSON.stringify(await encK(enc.encode(JSON.stringify(GH)))));
-    $('ghtok').value = ''; showGH(); render(); status('Mit GitHub verbunden.');
+    $('ghtok').value = ''; showGH(); render();
+    try { await saveAdminFile(APW); status('Mit GitHub verbunden, auf allen deinen Geräten.'); } catch (e) { status('Mit GitHub verbunden, aber nur auf diesem Gerät: ' + ghHint(e), true); }
     if (dirty) changed();
   } catch (e) { GH = null; showGH(); status('Verbinden ging nicht: ' + ghHint(e), true); }
 };
-$('ghdis').onclick = () => { if (!confirm('Verbindung auf diesem Gerät trennen? Der Token bleibt auf GitHub gültig, bis du ihn dort löschst.')) return; localStorage.removeItem('splitsuche-gh'); GH = null; showGH(); render(); status(''); };
+$('ghdis').onclick = async () => {
+  if (!confirm('Verbindung auf allen Geräten trennen? Den Token selbst löschst du danach am besten auch auf GitHub.')) return;
+  try { await deleteAdminFile(); } catch (e) {}
+  localStorage.removeItem('splitsuche-gh'); GH = null; showGH(); render(); status('Verbindung getrennt.');
+};
 $('savegh').onclick = () => changed();
 
 // ---- people ----
@@ -323,13 +352,22 @@ $('unlock').addEventListener('submit', async ev => {
   const b = $('ago'); b.disabled = true; b.textContent = 'Prüfe …';
   try {
     users = await loadUsers();
-    const u = await unlockKey(users, $('apw').value, 'admin');
+    APW = $('apw').value.trim();
+    const u = await unlockKey(users, APW, 'admin');
     if (!u) e.textContent = 'Das Admin-Passwort passt nicht.';
     else {
       K = u.raw; KEY = await crypto.subtle.importKey('raw', K, 'AES-GCM', false, ['encrypt', 'decrypt']);
       PK = await crypto.subtle.importKey('pkcs8', await decK(PRIV), { name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveKey']);
       $('unlock').hidden = true; $('panel').hidden = false;
-      try { const g = localStorage.getItem('splitsuche-gh'); if (g) { GH = JSON.parse(new TextDecoder().decode(await decK(JSON.parse(g)))); try { users = (await ghLoad()).list; } catch (err) { status('GitHub-Verbindung gestört: ' + ghHint(err), true); } } } catch (err) { GH = null; }
+      let fromFile = false;
+      try { const g = localStorage.getItem('splitsuche-gh'); if (g) GH = JSON.parse(new TextDecoder().decode(await decK(JSON.parse(g)))); } catch (err) { GH = null; }
+      if (!GH) { GH = await loadAdminFile(APW); fromFile = !!GH; if (GH) { try { localStorage.setItem('splitsuche-gh', JSON.stringify(await encK(enc.encode(JSON.stringify(GH))))); } catch (err) {} } }
+      if (GH) {
+        try {
+          users = (await ghLoad()).list;
+          if (!fromFile && !(await loadAdminFile(APW))) { try { await saveAdminFile(APW); } catch (err) {} }
+        } catch (err) { status('GitHub-Verbindung gestört: ' + ghHint(err), true); }
+      }
       showGH(); render(); initUpdate(); loadReqs();
     }
   } catch (err) { e.textContent = 'users.json konnte nicht geladen werden.'; }
@@ -348,7 +386,10 @@ $('newadmin').addEventListener('click', async () => {
   const pw = genpw();
   const e = await mkEntry('admin', pw);
   users = users.filter(u => u.n !== 'admin'); users.unshift(e);
-  $('apwnew').textContent = pw; $('adm').hidden = false; changed();
+  $('apwnew').textContent = pw; $('adm').hidden = false;
+  await changed();
+  if (GH && !dirty) { try { await saveAdminFile(pw); APW = pw; } catch (e) { status('Neues Passwort gespeichert, aber die GitHub-Verbindung für andere Geräte nicht: ' + ghHint(e), true); } }
+  else APW = pw;
 });
 $('copyu').addEventListener('click', async () => {
   const m = $('cmsg');
